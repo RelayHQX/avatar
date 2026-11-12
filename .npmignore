@@ -1,0 +1,12 @@
+src/
+test/
+tests/
+*.test.ts
+*.spec.ts
+*.map
+tsconfig.json
+.gitignore
+.npmignore
+.env
+.env.*
+npm-debug.log*

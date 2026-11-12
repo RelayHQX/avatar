@@ -1,0 +1,78 @@
+{
+  "name": "@relayhq/avatar",
+  "version": "0.1.0",
+  "description": "Universal, extensible avatar discovery and resolution engine",
+  "license": "ISC",
+  "author": "RelayHQ",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.js"
+    },
+    "./react-native": {
+      "types": "./dist/react-native.d.ts",
+      "import": "./dist/react-native.js"
+    },
+    "./react-native/react": {
+      "types": "./dist/react-native-react.d.ts",
+      "import": "./dist/react-native-react.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "clean": "node scripts/clean.js",
+    "build": "npm run clean && tsc -p tsconfig.json",
+    "test": "npm run build && node --test",
+    "benchmark": "npm run build && node scripts/benchmark.js",
+    "prepublishOnly": "npm test",
+    "release": "npm publish --access public",
+    "publish:npm": "npm run release"
+  },
+  "peerDependencies": {
+    "@react-native-async-storage/async-storage": ">=1",
+    "@tanstack/react-query": ">=5",
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "@react-native-async-storage/async-storage": {
+      "optional": true
+    },
+    "@tanstack/react-query": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@tanstack/react-query": "^5.0.0",
+    "@types/react": "^19.0.0",
+    "react": "^19.0.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "avatar",
+    "gravatar",
+    "libravatar",
+    "unavatar",
+    "react-native",
+    "expo",
+    "typescript"
+  ]
+}
