@@ -1,8 +1,8 @@
 {
   "name": "@rhq/avatar",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Universal, extensible avatar discovery and resolution engine",
-  "license": "ISC",
+  "license": "MIT",
   "author": "RelayHQ",
   "type": "module",
   "main": "./dist/index.js",
