@@ -1,4 +1,4 @@
-# @relayhq/avatar
+# @rhq/avatar
 
 **Universal avatar discovery and resolution engine.**
 
@@ -20,13 +20,13 @@ Avatar discovery is not email authentication. A domain logo or provider avatar d
 ## Install
 
 ```sh
-npm install @relayhq/avatar
+npm install @rhq/avatar
 ```
 
 ## Core usage
 
 ```ts
-import { createAvatarResolver } from '@relayhq/avatar';
+import { createAvatarResolver } from '@rhq/avatar';
 
 const avatars = createAvatarResolver({
   cache: {
@@ -73,7 +73,7 @@ npm install react @tanstack/react-query
 ```
 
 ```tsx
-import { useAvatar } from '@relayhq/avatar/react';
+import { useAvatar } from '@rhq/avatar/react';
 
 function SenderAvatar({ email, name }: { email: string; name: string }) {
   const avatar = useAvatar({ email, name });
@@ -87,15 +87,15 @@ function SenderAvatar({ email, name }: { email: string; name: string }) {
 }
 ```
 
-`useSenderAvatar({ email, name, existingAvatarUrl })` is also exported from `@relayhq/avatar/react` with the previous hook's return shape. Keeping hooks on a separate entry point prevents importing the core from pulling in React or TanStack Query.
+`useSenderAvatar({ email, name, existingAvatarUrl })` is also exported from `@rhq/avatar/react` with the previous hook's return shape. Keeping hooks on a separate entry point prevents importing the core from pulling in React or TanStack Query.
 
 ## React Native AsyncStorage cache
 
 React Native applications can use the native-only entry point. It uses AsyncStorage by default for persistent cache hydration and writes; the core and regular React entry never import AsyncStorage.
 
 ```ts
-import { createReactNativeAvatarResolver } from '@relayhq/avatar/react-native';
-import { useAvatar } from '@relayhq/avatar/react-native/react';
+import { createReactNativeAvatarResolver } from '@rhq/avatar/react-native';
+import { useAvatar } from '@rhq/avatar/react-native/react';
 
 const avatars = createReactNativeAvatarResolver({
   cache: {
@@ -110,7 +110,7 @@ await avatars.initialize(); // optional: call during app startup
 const avatar = await avatars.resolve({ email: 'hello@example.org', name: 'Hello' });
 ```
 
-The AsyncStorage peer is only needed when importing `@relayhq/avatar/react-native`. That entry also exports `resolveSenderAvatar` and `getCachedAvatar`, bound to the AsyncStorage-backed default resolver. The optional hook entry at `@relayhq/avatar/react-native/react` also requires React and TanStack Query; its `useAvatar` and `useSenderAvatar` hooks share the same resolver. Set `cache: false` to disable caching or `cache.enabled: false` to disable it while keeping other resolver options.
+The AsyncStorage peer is only needed when importing `@rhq/avatar/react-native`. That entry also exports `resolveSenderAvatar` and `getCachedAvatar`, bound to the AsyncStorage-backed default resolver. The optional hook entry at `@rhq/avatar/react-native/react` also requires React and TanStack Query; its `useAvatar` and `useSenderAvatar` hooks share the same resolver. Set `cache: false` to disable caching or `cache.enabled: false` to disable it while keeping other resolver options.
 
 The regular framework-independent resolver defaults to bounded in-memory caching. To persist outside React Native, supply an adapter implementing `getItem` and `setItem`; storage and malformed-data errors are surfaced. `createAsyncStorageAdapter(storage)` is also exported from the core package for explicit adapter wiring.
 
@@ -133,7 +133,7 @@ By default the memory cache identity includes normalized email, name, and `exist
 Providers can be registered directly and ordered with built-ins. Return `null` to let the next provider try. Custom providers receive request cancellation and shared network/hash helpers.
 
 ```ts
-import { createAvatarResolver } from '@relayhq/avatar';
+import { createAvatarResolver } from '@rhq/avatar';
 
 const avatars = createAvatarResolver({
   providers: [

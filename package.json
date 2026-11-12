@@ -1,5 +1,5 @@
 {
-  "name": "@relayhq/avatar",
+  "name": "@rhq/avatar",
   "version": "0.1.0",
   "description": "Universal, extensible avatar discovery and resolution engine",
   "license": "ISC",
