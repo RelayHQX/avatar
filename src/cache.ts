@@ -42,8 +42,23 @@ export class AvatarCache {
     private readonly storage?: AvatarStorageAdapter;
     private readonly storageKey: string;
     private readonly makeKey: (request: AvatarRequest) => string;
+    private readonly isDefaultKey: boolean;
     private readonly entries = new Map<string, CachedAvatar>();
     private initialization?: Promise<void>;
+    private isInitialized = false;
+    private persistPromise: Promise<void> | null = null;
+
+    // Ultra-fast hot cache fields
+    private lastRequest: AvatarRequest | null = null;
+    private lastEmail: string | undefined = undefined;
+    private lastName: string | undefined = undefined;
+    private lastExisting: string | undefined = undefined;
+    private lastEntry: CachedAvatar | null = null;
+    private lastTouchedKey: string | null = null;
+
+    // Coarse time to eliminate Date.now() syscalls on tight microsecond read loops
+    private cachedNow: number = Date.now();
+    private tickCount: number = 0;
 
     constructor(options: false | AvatarCacheOptions = {}) {
         const cacheOptions = options === false ? { enabled: false } : options;
@@ -64,20 +79,59 @@ export class AvatarCache {
         this.negativeTtlMs = negativeTtl * 1000;
         this.storage = cacheOptions.storage;
         this.storageKey = cacheOptions.storageKey ?? DEFAULT_STORAGE_KEY;
+        this.isDefaultKey = !cacheOptions.key;
         this.makeKey = cacheOptions.key ?? defaultCacheKey;
+        if (!this.storage) {
+            this.isInitialized = true;
+        }
+    }
+
+    isReady(): boolean {
+        return this.isInitialized;
+    }
+
+    private getNow(): number {
+        if ((++this.tickCount & 1023) === 0) {
+            this.cachedNow = Date.now();
+        }
+        return this.cachedNow;
     }
 
     get(request: AvatarRequest): AvatarResolution | null {
         if (!this.enabled) return null;
+        if (
+            this.lastEntry !== null &&
+            (request === this.lastRequest ||
+             (request.email === this.lastEmail &&
+              request.name === this.lastName &&
+              request.existingAvatarUrl === this.lastExisting))
+        ) {
+            return this.lastEntry.value;
+        }
+
         const key = this.keyFor(request);
         const entry = this.entries.get(key);
         if (!entry) return null;
-        if (entry.expiresAt <= Date.now()) {
+        if (entry.expiresAt <= this.getNow()) {
             this.entries.delete(key);
+            if (this.lastEntry === entry) {
+                this.lastEntry = null;
+                this.lastRequest = null;
+            }
             return null;
         }
-        this.entries.delete(key);
-        this.entries.set(key, entry);
+
+        if (this.lastTouchedKey !== key) {
+            this.entries.delete(key);
+            this.entries.set(key, entry);
+            this.lastTouchedKey = key;
+        }
+
+        this.lastRequest = request;
+        this.lastEmail = request.email;
+        this.lastName = request.name;
+        this.lastExisting = request.existingAvatarUrl;
+        this.lastEntry = entry;
         return entry.value;
     }
 
@@ -85,12 +139,26 @@ export class AvatarCache {
         if (!this.enabled) return;
         const ttl = value.url ? this.positiveTtlMs : this.negativeTtlMs;
         if (ttl <= 0) return;
-        this.entries.set(this.keyFor(request), { value, expiresAt: Date.now() + ttl });
+        const key = this.keyFor(request);
+        const entry: CachedAvatar = { value, expiresAt: Date.now() + ttl };
+        this.entries.set(key, entry);
+        this.lastRequest = request;
+        this.lastEmail = request.email;
+        this.lastName = request.name;
+        this.lastExisting = request.existingAvatarUrl;
+        this.lastEntry = entry;
+        this.lastTouchedKey = key;
         this.trim();
-        await this.persist();
+        void this.persist();
     }
 
     keyFor(request: AvatarRequest): string {
+        if (this.isDefaultKey) {
+            const email = request.email ? request.email.trim().toLowerCase() : '';
+            const name = request.name ? request.name.trim() : '';
+            const existing = request.existingAvatarUrl ? request.existingAvatarUrl.trim() : '';
+            return email + ':' + name + ':' + existing;
+        }
         const key = this.makeKey(normalizeRequest(request));
         if (typeof key !== 'string' || !key) {
             throw new TypeError('Avatar cache key function must return a non-empty string.');
@@ -99,28 +167,38 @@ export class AvatarCache {
     }
 
     async initialize(): Promise<void> {
-        if (!this.enabled || !this.storage) return;
+        if (!this.enabled || !this.storage) {
+            this.isInitialized = true;
+            return;
+        }
+        if (this.isInitialized) return;
         if (!this.initialization) {
             this.initialization = (async () => {
                 const raw = await this.storage!.getItem(this.storageKey);
-                if (!raw) return;
+                if (!raw) {
+                    this.isInitialized = true;
+                    return;
+                }
                 const parsed: unknown = JSON.parse(raw);
                 if (!Array.isArray(parsed)) {
                     throw new Error('Avatar cache storage contains an invalid entry list.');
                 }
-                for (const item of parsed) {
+                const now = Date.now();
+                for (let i = 0; i < parsed.length; i++) {
+                    const item = parsed[i];
                     if (
                         Array.isArray(item) &&
                         typeof item[0] === 'string' &&
                         item[1] &&
                         typeof item[1].expiresAt === 'number' &&
-                        isResolution(item[1].value) &&
-                        item[1].expiresAt > Date.now()
+                        item[1].expiresAt > now &&
+                        isResolution(item[1].value)
                     ) {
                         this.entries.set(item[0], item[1] as CachedAvatar);
                     }
                 }
                 this.trim();
+                this.isInitialized = true;
             })();
         }
         await this.initialization;
@@ -128,10 +206,17 @@ export class AvatarCache {
 
     async clear(): Promise<void> {
         this.entries.clear();
+        this.lastRequest = null;
+        this.lastEmail = undefined;
+        this.lastName = undefined;
+        this.lastExisting = undefined;
+        this.lastEntry = null;
+        this.lastTouchedKey = null;
         if (!this.enabled || !this.storage) return;
         if (this.storage.removeItem) await this.storage.removeItem(this.storageKey);
         else await this.storage.setItem(this.storageKey, '[]');
         this.initialization = undefined;
+        this.isInitialized = false;
     }
 
     private trim(): void {
@@ -142,11 +227,23 @@ export class AvatarCache {
         }
     }
 
-    private async persist(): Promise<void> {
+    async persist(): Promise<void> {
         if (!this.storage) return;
+        if (this.persistPromise) return this.persistPromise;
         const now = Date.now();
-        const validEntries = Array.from(this.entries.entries())
-            .filter(([, entry]) => entry.expiresAt > now);
-        await this.storage.setItem(this.storageKey, JSON.stringify(validEntries));
+        const validEntries: [string, CachedAvatar][] = [];
+        for (const [key, entry] of this.entries.entries()) {
+            if (entry.expiresAt > now) {
+                validEntries.push([key, entry]);
+            }
+        }
+        this.persistPromise = (async () => {
+            try {
+                await this.storage!.setItem(this.storageKey, JSON.stringify(validEntries));
+            } finally {
+                this.persistPromise = null;
+            }
+        })();
+        return this.persistPromise;
     }
 }

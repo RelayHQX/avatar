@@ -38,8 +38,10 @@ export function normalizeRequest(request: AvatarRequest): AvatarRequest {
 }
 
 export function defaultCacheKey(request: AvatarRequest): string {
-    const normalized = normalizeRequest(request);
-    return JSON.stringify([normalized.email, normalized.name, normalized.existingAvatarUrl]);
+    const email = request.email ? request.email.trim().toLowerCase() : '';
+    const name = request.name ? request.name.trim() : '';
+    const existing = request.existingAvatarUrl ? request.existingAvatarUrl.trim() : '';
+    return email + ':' + name + ':' + existing;
 }
 
 export function sanitizeAvatarUrl(url?: unknown): string | undefined {

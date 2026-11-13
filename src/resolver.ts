@@ -28,12 +28,32 @@ function resolveWithTimeout(
     timeoutMs: number,
     parentSignal?: AbortSignal,
 ): Promise<AvatarProviderResult | null> {
+    if (parentSignal?.aborted) {
+        return Promise.reject(parentSignal.reason ?? new Error('Avatar resolution aborted.'));
+    }
+
     const controller = new AbortController();
+    let directResult: AvatarProviderResult | Promise<AvatarProviderResult | null> | null;
+    try {
+        directResult = provider.resolve(request, {
+            ...context,
+            signal: controller.signal,
+        });
+    } catch (err) {
+        return Promise.reject(err);
+    }
+
+    // Synchronous immediate resolution fast-path (e.g. existing, domain)
+    if (!(directResult instanceof Promise)) {
+        return Promise.resolve(directResult);
+    }
+
+    // Asynchronous resolution with timeout and cancellation
     return new Promise((resolve, reject) => {
         let settled = false;
-        let timeout: ReturnType<typeof setTimeout>;
+        let timeout: ReturnType<typeof setTimeout> | undefined;
         const cleanup = () => {
-            clearTimeout(timeout);
+            if (timeout) clearTimeout(timeout);
             parentSignal?.removeEventListener('abort', abortFromParent);
         };
         const finishResolve = (value: AvatarProviderResult | null) => {
@@ -63,14 +83,7 @@ function resolveWithTimeout(
         if (parentSignal?.aborted) {
             abortFromParent();
         } else {
-            Promise.resolve()
-                .then(() =>
-                    provider.resolve(request, {
-                        ...context,
-                        signal: controller.signal,
-                    }),
-                )
-                .then(finishResolve, finishReject);
+            directResult.then(finishResolve, finishReject);
         }
     });
 }
@@ -197,7 +210,7 @@ export function createAvatarResolver(options: AvatarResolverOptions = {}): Avata
             await cache.initialize();
         },
         getCached(request) {
-            return cache.get(normalizeRequest(request));
+            return cache.get(request);
         },
         async clearCache() {
             await cache.clear();
@@ -207,7 +220,9 @@ export function createAvatarResolver(options: AvatarResolverOptions = {}): Avata
             if (input.signal?.aborted) {
                 throw input.signal.reason ?? new Error('Avatar resolution aborted.');
             }
-            await cache.initialize();
+            if (cache.enabled && !cache.isReady()) {
+                await cache.initialize();
+            }
             const cached = cache.get(request);
             if (cached) return cached;
 

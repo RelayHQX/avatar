@@ -1,16 +1,76 @@
-export async function hashEmailSha256(email: string): Promise<string> {
-    const bytes = encodeUtf8(email);
-    const cryptoApi = globalThis.crypto;
-    if (cryptoApi?.subtle) {
-        const input = new Uint8Array(bytes.length);
-        input.set(bytes);
-        const digest = await cryptoApi.subtle.digest('SHA-256', input.buffer);
-        return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+const HASH_CACHE = new Map<string, string>();
+const MAX_HASH_CACHE = 2048;
+
+const HEX_TABLE = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, '0'));
+const utf8Encoder = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null;
+
+interface NodeCryptoLike {
+    createHash?: (algorithm: string) => { update(data: string): { digest(encoding: string): string } };
+}
+
+let nodeCryptoCreateHash: ((algo: string) => { update(data: string): { digest(enc: string): string } }) | null | undefined;
+
+async function getNodeCreateHash() {
+    if (nodeCryptoCreateHash !== undefined) return nodeCryptoCreateHash;
+    const globalProcess = (globalThis as unknown as { process?: { versions?: { node?: string } } }).process;
+    if (typeof globalProcess !== 'undefined' && globalProcess.versions?.node) {
+        try {
+            const specifier = 'node:crypto';
+            const mod = (await import(specifier)) as NodeCryptoLike;
+            nodeCryptoCreateHash = mod.createHash ?? null;
+            return nodeCryptoCreateHash;
+        } catch {
+            nodeCryptoCreateHash = null;
+            return null;
+        }
     }
-    return sha256(bytes);
+    nodeCryptoCreateHash = null;
+    return null;
+}
+
+function cacheHash(email: string, hash: string): void {
+    if (HASH_CACHE.size >= MAX_HASH_CACHE) {
+        const oldest = HASH_CACHE.keys().next().value;
+        if (oldest !== undefined) HASH_CACHE.delete(oldest);
+    }
+    HASH_CACHE.set(email, hash);
+}
+
+export async function hashEmailSha256(email: string): Promise<string> {
+    const normalized = email.trim().toLowerCase();
+    const cached = HASH_CACHE.get(normalized);
+    if (cached) return cached;
+
+    const cryptoApi = globalThis.crypto;
+    if (cryptoApi) {
+        const nodeCreateHash = await getNodeCreateHash();
+        if (nodeCreateHash) {
+            const hash = nodeCreateHash('sha256').update(normalized).digest('hex');
+            cacheHash(normalized, hash);
+            return hash;
+        }
+
+        if (cryptoApi.subtle) {
+            const bytes = encodeUtf8(normalized);
+            const input = new Uint8Array(bytes.length);
+            input.set(bytes);
+            const digest = await cryptoApi.subtle.digest('SHA-256', input.buffer);
+            const hash = formatHex(new Uint8Array(digest));
+            cacheHash(normalized, hash);
+            return hash;
+        }
+    }
+
+    const bytes = encodeUtf8(normalized);
+    const hash = sha256(bytes);
+    cacheHash(normalized, hash);
+    return hash;
 }
 
 function encodeUtf8(value: string): Uint8Array {
+    if (utf8Encoder) {
+        return utf8Encoder.encode(value);
+    }
     const bytes: number[] = [];
     for (const character of value) {
         const codePoint = character.codePointAt(0)!;
@@ -29,6 +89,14 @@ function encodeUtf8(value: string): Uint8Array {
         }
     }
     return Uint8Array.from(bytes);
+}
+
+function formatHex(bytes: Uint8Array): string {
+    let result = '';
+    for (let i = 0; i < bytes.length; i++) {
+        result += HEX_TABLE[bytes[i]];
+    }
+    return result;
 }
 
 function sha256(bytes: Uint8Array): string {
@@ -93,5 +161,13 @@ function sha256(bytes: Uint8Array): string {
         hash[6] = (hash[6] + g) >>> 0;
         hash[7] = (hash[7] + h) >>> 0;
     }
-    return hash.map((value) => value.toString(16).padStart(8, '0')).join('');
+    let hex = '';
+    for (let i = 0; i < 8; i++) {
+        const val = hash[i];
+        hex += HEX_TABLE[(val >>> 24) & 0xff] +
+               HEX_TABLE[(val >>> 16) & 0xff] +
+               HEX_TABLE[(val >>> 8) & 0xff] +
+               HEX_TABLE[val & 0xff];
+    }
+    return hex;
 }

@@ -168,10 +168,12 @@ npm install
 npm test
 npm run build
 npm pack --dry-run
-npm run benchmark
+npm run benchmark         # Run both quick and comparative benchmarks
+npm run benchmark:quick   # Standalone @rhq/avatar package benchmark
+npm run benchmark:compare # 8-suite comparative benchmark vs legacy engine
 ```
 
-The performance test prints cold-resolution latency and the average time per in-memory cache hit. `npm run benchmark` runs a longer deterministic benchmark with a simulated provider delay; provider/network latency in production varies by device and network.
+The performance test prints cold-resolution latency and the average time per in-memory cache hit. `npm run benchmark:quick` runs the standalone package benchmark with warm in-memory throughput, while `npm run benchmark:compare` runs the full 8-suite comparative analysis against the legacy in-repo engine (see [benchmarks/README.md](benchmarks/README.md)).
 
 After confirming the package contents and npm account/organization access, publish the public scoped package with:
 

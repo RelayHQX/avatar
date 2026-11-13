@@ -1,9 +1,12 @@
 {
   "name": "@rhq/avatar",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Universal, extensible avatar discovery and resolution engine",
   "license": "MIT",
   "author": "RelayHQ",
+  "repository": {
+    "url": "https://github.com/RelayHQX/avatar"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -36,10 +39,13 @@
     "clean": "node scripts/clean.js",
     "build": "npm run clean && tsc -p tsconfig.json",
     "test": "npm run build && node --test",
-    "benchmark": "npm run build && node scripts/benchmark.js",
     "prepublishOnly": "npm test",
     "release": "npm publish --access public",
-    "publish:npm": "npm run release"
+    "publish:npm": "npm run release",
+    "benchmark": "npm run build && node scripts/benchmark.js && node benchmarks/run-benchmarks.mjs",
+    "benchmark:quick": "npm run build && node scripts/benchmark.js",
+    "benchmark:compare": "npm run build && node benchmarks/run-benchmarks.mjs",
+    "benchmark:all": "npm run benchmark"
   },
   "peerDependencies": {
     "@react-native-async-storage/async-storage": ">=1",
